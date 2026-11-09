@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head><title>PostgreSQL: Documentation: 16: 20.10. Automatic Vacuuming</title></head>
+<body><div id="docContent">
+<div class="navheader">
+<table summary="Navigation header" width="100%">
+<tr>
+<th align="center" colspan="5">20.10. Automatic Vacuuming</th>
+</tr>
+<tr>
+<td align="left" width="10%"><a accesskey="p" href="runtime-config-statistics.html" title="20.9. Run-time Statistics">Prev</a> </td>
+<td align="left" width="10%"><a accesskey="u" href="runtime-config.html" title="Chapter 20. Server Configuration">Up</a></td>
+<th align="center" width="60%">Chapter 20. Server Configuration</th>
+<td align="right" width="10%"><a accesskey="h" href="index.html" title="PostgreSQL 16.15 Documentation">Home</a></td>
+<td align="right" width="10%"> <a accesskey="n" href="runtime-config-client.html" title="20.11. Client Connection Defaults">Next</a></td>
+</tr>
+</table>
+<hr/>
+</div>
+<div class="sect1" id="RUNTIME-CONFIG-AUTOVACUUM">
+<div class="titlepage">
+<div>
+<div>
+<h2 class="title" style="clear: both">20.10. Automatic Vacuuming <a class="id_link" href="#RUNTIME-CONFIG-AUTOVACUUM">#</a></h2>
+</div>
+</div>
+</div><a class="indexterm" id="id-1.6.7.13.2" name="id-1.6.7.13.2"></a>
+<p>These settings control the behavior of the <em class="firstterm">autovacuum</em> feature. Refer to <a class="xref" href="routine-vacuuming.html#AUTOVACUUM" title="25.1.6. The Autovacuum Daemon">Section 25.1.6</a> for more information. Note that many of these settings can be overridden on a per-table basis; see <a class="xref" href="sql-createtable.html#SQL-CREATETABLE-STORAGE-PARAMETERS" title="Storage Parameters">Storage Parameters</a>.</p>
+<div class="variablelist">
+<dl class="variablelist">
+<dt id="GUC-AUTOVACUUM"><span class="term"><code class="varname">autovacuum</code> (<code class="type">boolean</code>) <a class="indexterm" id="id-1.6.7.13.4.1.1.3" name="id-1.6.7.13.4.1.1.3"></a></span> <a class="id_link" href="#GUC-AUTOVACUUM">#</a></dt>
+<dd>
+<p>Controls whether the server should run the autovacuum launcher daemon. This is on by default; however, <a class="xref" href="runtime-config-statistics.html#GUC-TRACK-COUNTS">track_counts</a> must also be enabled for autovacuum to work. This parameter can only be set in the <code class="filename">postgresql.conf</code> file or on the server command line; however, autovacuuming can be disabled for individual tables by changing table storage parameters.</p>
+<p>Note that even when this parameter is disabled, the system will launch autovacuum processes if necessary to prevent transaction ID wraparound. See <a class="xref" href="routine-vacuuming.html#VACUUM-FOR-WRAPAROUND" title="25.1.5. Preventing Transaction ID Wraparound Failures">Section 25.1.5</a> for more information.</p>
+</dd>
+<dt id="GUC-AUTOVACUUM-MAX-WORKERS"><span class="term"><code class="varname">autovacuum_max_workers</code> (<code class="type">integer</code>) <a class="indexterm" id="id-1.6.7.13.4.2.1.3" name="id-1.6.7.13.4.2.1.3"></a></span> <a class="id_link" href="#GUC-AUTOVACUUM-MAX-WORKERS">#</a></dt>
+<dd>
+<p>Specifies the maximum number of autovacuum processes (other than the autovacuum launcher) that may be running at any one time. The default is three. This parameter can only be set at server start.</p>
+</dd>
+<dt id="GUC-AUTOVACUUM-NAPTIME"><span class="term"><code class="varname">autovacuum_naptime</code> (<code class="type">integer</code>) <a class="indexterm" id="id-1.6.7.13.4.3.1.3" name="id-1.6.7.13.4.3.1.3"></a></span> <a class="id_link" href="#GUC-AUTOVACUUM-NAPTIME">#</a></dt>
+<dd>
+<p>Specifies the minimum delay between autovacuum runs on any given database. In each round the daemon examines the database and issues <code class="command">VACUUM</code> and <code class="command">ANALYZE</code> commands as needed for tables in that database. If this value is specified without units, it is taken as seconds. The default is one minute (<code class="literal">1min</code>). This parameter can only be set in the <code class="filename">postgresql.conf</code> file or on the server command line.</p>
+</dd>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</dl>
+</div>
+</div>
+<div class="navfooter">
+<hr/>
+<table summary="Navigation footer" width="100%">
+<tr>
+<td align="left" width="40%"><a accesskey="p" href="runtime-config-statistics.html" title="20.9. Run-time Statistics">Prev</a> </td>
+<td align="center" width="20%"><a accesskey="u" href="runtime-config.html" title="Chapter 20. Server Configuration">Up</a></td>
+<td align="right" width="40%"> <a accesskey="n" href="runtime-config-client.html" title="20.11. Client Connection Defaults">Next</a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="40%">20.9. Run-time Statistics </td>
+<td align="center" width="20%"><a accesskey="h" href="index.html" title="PostgreSQL 16.15 Documentation">Home</a></td>
+<td align="right" valign="top" width="40%"> 20.11. Client Connection Defaults</td>
+</tr>
+</table>
+</div>
+</div></body>
+</html>

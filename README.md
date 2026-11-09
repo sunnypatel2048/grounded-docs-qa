@@ -37,6 +37,28 @@ uv run docs-qa fetch --versions 18 --delay 2  # one version, slower
 - **Resumable:** a page already on disk is never downloaded again, so Ctrl-C and re-running the same command continues where it stopped, and a complete re-run makes no page requests. Pages are written atomically (temp file, then rename), so a crash can't leave a half-written page.
 - **Recorded:** each version's `manifest.jsonl` holds one line per page: URL, size, SHA-256 and download time.
 
+## Parsing pages into sections
+
+`docs_qa/parse.py` turns each saved page into sections of clean text blocks.
+
+- **Only the documentation:** the page's `div#docContent` is kept; the site menu, version switcher, navigation, tables of contents and permalink icons are dropped.
+- **Sections from the document structure:** sections come from the DocBook section elements, not from heading tags (note boxes have their own `<h3>Note</h3>`, which would otherwise become fake sections). Settings, libpq functions, psql commands and glossary terms have their own IDs (`GUC-AUTOVACUUM-NAPTIME`), so each becomes its own section.
+- **Stable keys:** hand-written IDs (`SQL-WITH`) are used as keys. Generated IDs (`id-1.9.3.172.7`) encode a section's position in the book and change when pages are added (179 of 1,382 such sections moved between 16 and 17), so those sections are keyed by parent and heading (`SQL-SELECT/description`). Links still use the real ID.
+- **Unsplittable blocks:** a section is a list of paragraphs, code examples, table rows, list items and definitions. The chunker splits only between blocks, so a function's signature, description and example stay together.
+
+```bash
+uv run docs-qa parse 16/sql-select.html   # show one page's sections and blocks
+uv run docs-qa parse --all                # parse every page, print totals
+```
+
+| Version | Pages | Sections | Blocks | Pages with no content |
+|---|---|---|---|---|
+| 16 | 1,169 | 6,040 | 32,717 | 16 |
+| 17 | 1,143 | 6,160 | 33,161 | 11 |
+| 18 | 1,148 | 6,286 | 33,653 | 11 |
+
+Pages with no content are tables of contents and the alphabetical index.
+
 ## Database
 
 Schema changes are numbered SQL files in [`src/docs_qa/sql/`](src/docs_qa/sql/), applied in order by `docs-qa db up` and recorded in `schema_migrations`. An applied file is never edited: its checksum is stored, so a change has to go in a new file.
@@ -56,6 +78,8 @@ src/docs_qa/
   cli.py                  the docs-qa command
   db.py                   connection and migration runner
   fetch.py                polite, resumable docs downloader
+  parse.py                pages -> sections of text blocks
   sql/                    numbered schema migrations
 tests/
+  fixtures/16/            trimmed real pages for the parser tests
 ```

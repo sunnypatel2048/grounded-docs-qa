@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head><title>PostgreSQL: Documentation: 16: 9.4. String Functions and Operators</title></head>
+<body><div id="docContent">
+<div class="navheader">
+<table summary="Navigation header" width="100%">
+<tr>
+<th align="center" colspan="5">9.4. String Functions and Operators</th>
+</tr>
+<tr>
+<td align="left" width="10%"><a accesskey="p" href="functions-math.html" title="9.3. Mathematical Functions and Operators">Prev</a> </td>
+<td align="left" width="10%"><a accesskey="u" href="functions.html" title="Chapter 9. Functions and Operators">Up</a></td>
+<th align="center" width="60%">Chapter 9. Functions and Operators</th>
+<td align="right" width="10%"><a accesskey="h" href="index.html" title="PostgreSQL 16.15 Documentation">Home</a></td>
+<td align="right" width="10%"> <a accesskey="n" href="functions-binarystring.html" title="9.5. Binary String Functions and Operators">Next</a></td>
+</tr>
+</table>
+<hr/>
+</div>
+<div class="sect1" id="FUNCTIONS-STRING">
+<div class="titlepage">
+<div>
+<div>
+<h2 class="title" style="clear: both">9.4. String Functions and Operators <a class="id_link" href="#FUNCTIONS-STRING">#</a></h2>
+</div>
+</div>
+</div>
+<div class="toc">
+<dl class="toc">
+<dt><span class="sect2"><a href="functions-string.html#FUNCTIONS-STRING-FORMAT">9.4.1. <code class="function">format</code></a></span></dt>
+</dl>
+</div>
+<p>This section describes functions and operators for examining and manipulating string values. Strings in this context include values of the types <code class="type">character</code>, <code class="type">character varying</code>, and <code class="type">text</code>. Except where noted, these functions and operators are declared to accept and return type <code class="type">text</code>. They will interchangeably accept <code class="type">character varying</code> arguments. Values of type <code class="type">character</code> will be converted to <code class="type">text</code> before the function or operator is applied, resulting in stripping any trailing spaces in the <code class="type">character</code> value.</p>
+<p><acronym class="acronym">SQL</acronym> defines some string functions that use key words, rather than commas, to separate arguments. Details are in <a class="xref" href="functions-string.html#FUNCTIONS-STRING-SQL" title="Table 9.9. SQL String Functions and Operators">Table 9.9</a>. <span class="productname">PostgreSQL</span> also provides versions of these functions that use the regular function invocation syntax (see <a class="xref" href="functions-string.html#FUNCTIONS-STRING-OTHER" title="Table 9.10. Other String Functions and Operators">Table 9.10</a>).</p>
+<div class="note">
+<h3 class="title">Note</h3>
+<p>The string concatenation operator (<code class="literal">||</code>) will accept non-string input, so long as at least one input is of string type, as shown in <a class="xref" href="functions-string.html#FUNCTIONS-STRING-SQL" title="Table 9.9. SQL String Functions and Operators">Table 9.9</a>. For other cases, inserting an explicit coercion to <code class="type">text</code> can be used to have non-string input accepted.</p>
+</div>
+<div class="table" id="FUNCTIONS-STRING-SQL">
+<p class="title"><strong>Table 9.9. <acronym class="acronym">SQL</acronym> String Functions and Operators</strong></p>
+<div class="table-contents">
+<table border="1" class="table" summary="SQL String Functions and Operators">
+<colgroup>
+<col/>
+</colgroup>
+<thead>
+<tr>
+<th class="func_table_entry">
+<p class="func_signature">Function/Operator</p>
+<p>Description</p>
+<p>Example(s)</p>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="func_table_entry">
+<p class="func_signature"><a class="indexterm" id="id-1.5.8.10.5.2.2.1.1.1.1" name="id-1.5.8.10.5.2.2.1.1.1.1"></a> <code class="type">text</code> <code class="literal">||</code> <code class="type">text</code> → <code class="returnvalue">text</code></p>
+<p>Concatenates the two strings.</p>
+<p><code class="literal">'Post' || 'greSQL'</code> → <code class="returnvalue">PostgreSQL</code></p>
+</td>
+</tr>
+<tr>
+<td class="func_table_entry">
+<p class="func_signature"><code class="type">text</code> <code class="literal">||</code> <code class="type">anynonarray</code> → <code class="returnvalue">text</code></p>
+<p class="func_signature"><code class="type">anynonarray</code> <code class="literal">||</code> <code class="type">text</code> → <code class="returnvalue">text</code></p>
+<p>Converts the non-string input to text, then concatenates the two strings. (The non-string input cannot be of an array type, because that would create ambiguity with the array <code class="literal">||</code> operators. If you want to concatenate an array's text equivalent, cast it to <code class="type">text</code> explicitly.)</p>
+<p><code class="literal">'Value: ' || 42</code> → <code class="returnvalue">Value: 42</code></p>
+</td>
+</tr>
+<tr>
+<td class="func_table_entry">
+<p class="func_signature"><a class="indexterm" id="id-1.5.8.10.5.2.2.3.1.1.1" name="id-1.5.8.10.5.2.2.3.1.1.1"></a> <code class="function">btrim</code> ( <em class="parameter"><code>string</code></em> <code class="type">text</code> [<span class="optional">, <em class="parameter"><code>characters</code></em> <code class="type">text</code></span> ] ) → <code class="returnvalue">text</code></p>
+<p>Removes the longest string containing only characters in <em class="parameter"><code>characters</code></em> (a space by default) from the start and end of <em class="parameter"><code>string</code></em>.</p>
+<p><code class="literal">btrim('xyxtrimyyx', 'xyz')</code> → <code class="returnvalue">trim</code></p>
+</td>
+</tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</tbody>
+</table>
+</div>
+</div>
+
+
+
+
+
+</div>
+<div class="navfooter">
+<hr/>
+<table summary="Navigation footer" width="100%">
+<tr>
+<td align="left" width="40%"><a accesskey="p" href="functions-math.html" title="9.3. Mathematical Functions and Operators">Prev</a> </td>
+<td align="center" width="20%"><a accesskey="u" href="functions.html" title="Chapter 9. Functions and Operators">Up</a></td>
+<td align="right" width="40%"> <a accesskey="n" href="functions-binarystring.html" title="9.5. Binary String Functions and Operators">Next</a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="40%">9.3. Mathematical Functions and Operators </td>
+<td align="center" width="20%"><a accesskey="h" href="index.html" title="PostgreSQL 16.15 Documentation">Home</a></td>
+<td align="right" valign="top" width="40%"> 9.5. Binary String Functions and Operators</td>
+</tr>
+</table>
+</div>
+</div></body>
+</html>

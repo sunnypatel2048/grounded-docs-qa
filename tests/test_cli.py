@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from conftest import require_pgvector
 
@@ -79,3 +81,31 @@ def test_fetch_aborted_is_a_clean_error(monkeypatch, tmp_path, capsys):
 
     assert code == 1
     assert "error: couldn't read robots.txt" in capsys.readouterr().err
+
+
+FIXTURES = str(Path(__file__).parent / "fixtures")
+
+
+def test_parse_shows_a_pages_sections(capsys):
+    code = cli.main(["parse", "16/runtime-config-autovacuum.html", "--raw-dir", FIXTURES])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "## Automatic Vacuuming > autovacuum_naptime (integer)" in out
+    assert "key: GUC-AUTOVACUUM-NAPTIME" in out
+
+
+def test_parse_missing_page_is_a_clean_error(capsys):
+    code = cli.main(["parse", "16/nope.html", "--raw-dir", FIXTURES])
+    assert code == 1
+    assert "not found" in capsys.readouterr().err
+
+
+def test_parse_all_prints_totals(capsys):
+    code = cli.main(["parse", "--all", "--raw-dir", FIXTURES])
+    assert code == 0
+    assert "16: 4 pages, 14 sections" in capsys.readouterr().out
+
+
+def test_parse_all_without_downloads_says_to_fetch(tmp_path, capsys):
+    assert cli.main(["parse", "--all", "--raw-dir", str(tmp_path)]) == 1
+    assert "docs-qa fetch" in capsys.readouterr().err
