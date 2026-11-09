@@ -76,7 +76,15 @@ uv run docs-qa chunk 16/sql-select.html   # show one page's chunks
 uv run docs-qa chunk --report             # chunk everything, print sizes and savings
 ```
 
-_Report numbers: coming._
+| Version | Chunks | Tokens p50 | p90 | p99 | Max |
+|---|---|---|---|---|---|
+| 16 | 8,815 | 207 | 358 | 392 | 400 |
+| 17 | 8,995 | 206 | 357 | 393 | 400 |
+| 18 | 9,177 | 206 | 357 | 394 | 400 |
+
+- 442 blocks were too big on their own: 222 code blocks split between lines, 220 prose blocks between sentences, none cut mid-sentence.
+- 12,848 distinct chunk texts out of 26,987 chunks: 52% of chunks repeat text from another version and need no embedding of their own.
+- Chunking all three versions takes about 46 seconds on a MacBook Air.
 
 ## Database
 
