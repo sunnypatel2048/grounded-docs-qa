@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from conftest import require_pgvector
 
-from docs_qa import cli, fetch, tokens
+from docs_qa import cli, embed, fetch, tokens
 
 
 def test_a_command_group_is_required():
@@ -30,7 +30,7 @@ def test_db_up_twice_then_status(db_conn, test_db_url, monkeypatch, capsys):
 
     assert cli.main(["db", "status"]) == 0
     out = capsys.readouterr().out
-    assert "applied  001_init.sql" in out and "1 applied, 0 pending" in out
+    assert "applied  001_init.sql" in out and "2 applied, 0 pending" in out
 
 
 def test_fetch_help_lists_options(capsys):
@@ -135,3 +135,33 @@ def test_chunk_without_tokenizer_is_a_clean_error(monkeypatch, capsys):
     code = cli.main(["chunk", "--report", "--raw-dir", FIXTURES])
     assert code == 1
     assert "couldn't load the BAAI/bge-small-en-v1.5 tokenizer" in capsys.readouterr().err
+
+
+@pytest.mark.db
+def test_ingest_prints_a_report(db_conn, test_db_url, monkeypatch, capsys):
+    require_pgvector(db_conn)
+    db_conn.close()
+
+    class FakeEmbedder(embed.HashEmbedder):
+        device = "cpu"
+
+    monkeypatch.setenv("DATABASE_URL", test_db_url)
+    monkeypatch.setattr(tokens, "HFTokenCounter", tokens.WhitespaceCounter)
+    monkeypatch.setattr(embed, "LocalEmbedder", FakeEmbedder)
+    assert cli.main(["db", "up"]) == 0
+    code = cli.main(["ingest", "--versions", "16", "--raw-dir", FIXTURES])
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "pages: 4 new, 0 changed, 0 unchanged, 0 removed" in out
+    assert "storage: pages" in out
+
+
+def test_ingest_without_the_embed_group_explains_how_to_install(monkeypatch, capsys):
+    def missing():
+        raise ModuleNotFoundError("No module named 'torch'", name="torch")
+
+    monkeypatch.setattr(tokens, "HFTokenCounter", tokens.WhitespaceCounter)
+    monkeypatch.setattr(embed, "LocalEmbedder", missing)
+    assert cli.main(["ingest", "--raw-dir", FIXTURES]) == 1
+    assert "embed` dependency group" in capsys.readouterr().err

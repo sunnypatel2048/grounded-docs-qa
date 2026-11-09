@@ -8,6 +8,7 @@ Commands:
 - `uv run docs-qa parse --all`: parse every downloaded page and print totals
 - `uv run docs-qa chunk 16/sql-select.html`: show a page's chunks
 - `uv run docs-qa chunk --report`: chunk every page and print sizes and embedding savings
+- `uv run docs-qa ingest`: parse, chunk, embed and store everything (re-runs skip unchanged pages)
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ import sys
 import time
 from pathlib import Path
 
-from docs_qa import chunk, db, fetch, parse, tokens
+from docs_qa import chunk, db, embed, fetch, ingest, parse, tokens
 from docs_qa.config import ConfigError, database_url
 
 
@@ -177,6 +178,41 @@ def _chunk_report(raw_dir: Path, chunker: chunk.Chunker) -> int:
     return 0
 
 
+def _ingest(versions: list[str], limit: int | None, raw_dir: Path) -> int:
+    try:
+        counter = tokens.HFTokenCounter()
+        embedder = embed.LocalEmbedder()
+    except ImportError as e:
+        print(
+            f"error: {e.name} isn't installed. It's in the `embed` dependency group: "
+            "run `uv sync` (or `uv sync --group embed`).",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"embedding with {embedder.model} on {embedder.device}")
+    with db.connect(database_url()) as conn:
+        r = ingest.ingest(
+            conn,
+            raw_dir=raw_dir,
+            versions=versions,
+            chunker=chunk.Chunker(counter),
+            embedder=embedder,
+            limit=limit,
+        )
+    print(
+        f"\npages: {r.pages_new} new, {r.pages_changed} changed, "
+        f"{r.pages_unchanged} unchanged, {r.pages_removed} removed"
+    )
+    print(f"chunks: {r.chunks_written} written, {r.chunks_deleted} deleted")
+    print(
+        f"embeddings: {r.distinct_texts} distinct texts; {r.embeddings_computed} computed, "
+        f"{r.embeddings_reused} reused from the cache"
+    )
+    print("time: " + ", ".join(f"{stage} {s:.0f}s" for stage, s in r.seconds.items()))
+    print("storage: " + ", ".join(f"{name} {size}" for name, size in r.sizes.items()))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="docs-qa")
     groups = parser.add_subparsers(dest="group", required=True)
@@ -209,6 +245,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     chunk_parser.add_argument("--max-tokens", type=int, default=chunk.MAX_TOKENS)
     chunk_parser.add_argument("--raw-dir", type=Path, default=fetch.DEFAULT_RAW_DIR)
+
+    ingest_parser = groups.add_parser("ingest", help="parse, chunk, embed and store the docs")
+    ingest_parser.add_argument("--versions", nargs="+", default=["16", "17", "18"])
+    ingest_parser.add_argument(
+        "--limit", type=int, default=None, help="first N pages per version only (for a trial)"
+    )
+    ingest_parser.add_argument("--raw-dir", type=Path, default=fetch.DEFAULT_RAW_DIR)
     args = parser.parse_args(argv)
 
     try:
@@ -220,6 +263,8 @@ def main(argv: list[str] | None = None) -> int:
             if not args.pages:
                 parser.error("parse: give one or more pages (e.g. 16/sql-select.html) or --all")
             return _parse_show(args.pages, args.raw_dir)
+        if args.group == "ingest":
+            return _ingest(args.versions, args.limit, args.raw_dir)
         if args.group == "chunk":
             if not args.report and not args.pages:
                 parser.error("chunk: give one or more pages (e.g. 16/sql-select.html) or --report")
@@ -240,7 +285,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "up":
             return _db_up()
         return _db_status()
-    except (db.MigrationError, ConfigError, fetch.CrawlAborted, parse.ParseError) as e:
+    except (
+        db.MigrationError,
+        ConfigError,
+        fetch.CrawlAborted,
+        parse.ParseError,
+        ingest.IngestError,
+    ) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

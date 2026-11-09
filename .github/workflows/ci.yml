@@ -37,14 +37,16 @@ jobs:
 
       # uv reads .python-version and installs that Python itself.
       # --locked fails if uv.lock is out of date with pyproject.toml.
+      # --no-group embed skips torch: tests use a fake embedder.
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --no-group embed
 
+      # --no-sync: don't let `uv run` install the default groups (torch) after all.
       - name: Lint
-        run: uv run ruff check
+        run: uv run --no-sync ruff check
 
       - name: Format check
-        run: uv run ruff format --check
+        run: uv run --no-sync ruff format --check
 
       - name: Tests
-        run: uv run pytest -q -rs   # -rs lists skipped tests, so a missing database is visible
+        run: uv run --no-sync pytest -q -rs   # -rs lists skipped tests, so a missing database is visible

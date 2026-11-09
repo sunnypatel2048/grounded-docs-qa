@@ -30,6 +30,14 @@ dev = [
     "pytest>=9.1",
     "ruff>=0.17",
 ]
+# The embedding model (torch is large). Installed locally by default; CI leaves it out.
+embed = [
+    "torch",
+    "transformers",
+]
+
+[tool.uv]
+default-groups = ["dev", "embed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

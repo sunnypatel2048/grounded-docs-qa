@@ -16,6 +16,7 @@ cp .env.example .env
 docker compose up -d --wait     # pgvector on localhost:5433
 uv run docs-qa db up            # create the schema
 uv run docs-qa fetch            # download the docs (~1 hour, resumable)
+uv run docs-qa ingest           # parse, chunk, embed, store (re-runs skip unchanged pages)
 uv run pytest -q
 ```
 
@@ -86,6 +87,34 @@ uv run docs-qa chunk --report             # chunk everything, print sizes and sa
 - 12,848 distinct chunk texts out of 26,987 chunks: 52% of chunks repeat text from another version and need no embedding of their own.
 - Chunking all three versions takes about 46 seconds on a MacBook Air.
 
+## Ingestion
+
+`docs-qa ingest` parses, chunks, embeds and stores everything, and is safe to re-run at any time.
+
+- **Embeddings:** `BAAI/bge-small-en-v1.5` runs locally (Hugging Face transformers + torch, on the Apple GPU when available): the [CLS] token's final hidden state, normalized, as the model card specifies. torch is in the `embed` dependency group, installed locally by default and left out of CI, where tests use a deterministic fake embedder.
+- **Only changed pages:** each page's hash covers its chunks (ids, texts, metadata) and the embedding model. Pages whose hash matches the stored one are skipped, so a re-run does nothing, and a parser, chunker or model change re-processes exactly the pages it affects.
+- **Each text embedded once:** embeddings are cached by (model, content hash). Text shared between versions, or unchanged since the last run, is never embedded again. Each batch is committed as it finishes, so an interrupted run loses at most one batch.
+- **All or nothing per page:** a page's row, chunks and the removal of chunks that no longer exist happen in one transaction. Pages that disappear from disk are deleted on a full run (never with `--limit`).
+
+```bash
+uv run docs-qa ingest --limit 20   # trial: first 20 pages per version
+uv run docs-qa ingest              # everything; run it again to see "0 changed"
+```
+
+First full ingest on a MacBook Air (Apple GPU), after a 20-pages-per-version trial run:
+
+| Stage | Result |
+|---|---|
+| Parse and chunk | 3,460 pages in 43 s (60 trial pages already stored, skipped as unchanged) |
+| Embed | 12,500 new texts in 101 s (~125 per second); 19 more found in the cache |
+| Write | 3,400 pages, 26,296 chunks in 27 s |
+
+What's stored for all three versions:
+
+- 3,460 pages and 26,987 chunks, but only 12,848 embeddings: content-hash dedup across versions saves 52% of the embedding work.
+- 98 MB for chunks including indexes (25 MB of it the HNSW index), 27 MB of embedding cache.
+- A second run finds nothing to do: 0 new, 0 changed, nothing embedded, only the ~45 s of parsing and chunking.
+
 ## Database
 
 Schema changes are numbered SQL files in [`src/docs_qa/sql/`](src/docs_qa/sql/), applied in order by `docs-qa db up` and recorded in `schema_migrations`. An applied file is never edited: its checksum is stored, so a change has to go in a new file.
@@ -108,6 +137,8 @@ src/docs_qa/
   parse.py                pages -> sections of text blocks
   chunk.py                sections -> chunks of at most 400 tokens
   tokens.py               token counting with the embedding model's tokenizer
+  embed.py                the embedding model (and a fake one for tests)
+  ingest.py               embed and store, skipping unchanged pages
   sql/                    numbered schema migrations
 tests/
   fixtures/16/            trimmed real pages for the parser tests
