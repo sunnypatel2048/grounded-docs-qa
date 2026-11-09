@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from conftest import require_pgvector
 
-from docs_qa import cli, fetch
+from docs_qa import cli, fetch, tokens
 
 
 def test_a_command_group_is_required():
@@ -109,3 +109,29 @@ def test_parse_all_prints_totals(capsys):
 def test_parse_all_without_downloads_says_to_fetch(tmp_path, capsys):
     assert cli.main(["parse", "--all", "--raw-dir", str(tmp_path)]) == 1
     assert "docs-qa fetch" in capsys.readouterr().err
+
+
+def test_chunk_shows_a_pages_chunks(monkeypatch, capsys):
+    monkeypatch.setattr(tokens, "HFTokenCounter", tokens.WhitespaceCounter)
+    code = cli.main(["chunk", "16/runtime-config-autovacuum.html", "--raw-dir", FIXTURES])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "=== 16/runtime-config-autovacuum.html#GUC-AUTOVACUUM-NAPTIME/0" in out
+
+
+def test_chunk_report_prints_totals(monkeypatch, capsys):
+    monkeypatch.setattr(tokens, "HFTokenCounter", tokens.WhitespaceCounter)
+    code = cli.main(["chunk", "--report", "--raw-dir", FIXTURES])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "16: " in out and "distinct chunk texts:" in out
+
+
+def test_chunk_without_tokenizer_is_a_clean_error(monkeypatch, capsys):
+    def unavailable():
+        raise OSError("no network")
+
+    monkeypatch.setattr(tokens, "HFTokenCounter", unavailable)
+    code = cli.main(["chunk", "--report", "--raw-dir", FIXTURES])
+    assert code == 1
+    assert "couldn't load the BAAI/bge-small-en-v1.5 tokenizer" in capsys.readouterr().err

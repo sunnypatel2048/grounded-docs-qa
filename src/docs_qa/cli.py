@@ -6,15 +6,18 @@ Commands:
 - `uv run docs-qa fetch --versions 16 17 18`: download the documentation pages (resumable)
 - `uv run docs-qa parse 16/sql-select.html`: show how a page splits into sections and blocks
 - `uv run docs-qa parse --all`: parse every downloaded page and print totals
+- `uv run docs-qa chunk 16/sql-select.html`: show a page's chunks
+- `uv run docs-qa chunk --report`: chunk every page and print sizes and embedding savings
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
-from docs_qa import db, fetch, parse
+from docs_qa import chunk, db, fetch, parse, tokens
 from docs_qa.config import ConfigError, database_url
 
 
@@ -85,7 +88,7 @@ def _parse_show(pages: list[str], raw_dir: Path) -> int:
 
 
 def _parse_all(raw_dir: Path) -> int:
-    versions = sorted(p.name for p in raw_dir.glob("*") if p.is_dir() and p.name.isdigit())
+    versions = _downloaded_versions(raw_dir)
     if not versions:
         print(
             f"error: no downloaded pages in {raw_dir}; run `docs-qa fetch` first", file=sys.stderr
@@ -113,6 +116,67 @@ def _parse_all(raw_dir: Path) -> int:
     return 1 if errors else 0
 
 
+def _downloaded_versions(raw_dir: Path) -> list[str]:
+    return sorted(p.name for p in raw_dir.glob("*") if p.is_dir() and p.name.isdigit())
+
+
+def _percentile(sorted_values: list[int], p: float) -> int:
+    return sorted_values[round(p * (len(sorted_values) - 1))]
+
+
+def _chunk_show(pages: list[str], raw_dir: Path, chunker: chunk.Chunker) -> int:
+    for ref in pages:
+        version, _, name = ref.partition("/")
+        if not (raw_dir / version / name).is_file():
+            print(
+                f"error: {raw_dir / ref} not found (expected e.g. 16/sql-select.html)",
+                file=sys.stderr,
+            )
+            return 1
+        for c in chunker.chunk_page(parse.parse_file(raw_dir, version, name)):
+            print(f"=== {c.id}  ({c.token_count} tokens)")
+            print(f"    {c.url}")
+            print(c.text)
+            print()
+    return 0
+
+
+def _chunk_report(raw_dir: Path, chunker: chunk.Chunker) -> int:
+    versions = _downloaded_versions(raw_dir)
+    if not versions:
+        print(
+            f"error: no downloaded pages in {raw_dir}; run `docs-qa fetch` first", file=sys.stderr
+        )
+        return 1
+    started = time.monotonic()
+    hashes: set[str] = set()
+    total = 0
+    print(f"tokenizer: {chunker.counter.model}, at most {chunker.max_tokens} tokens per chunk\n")
+    for version in versions:
+        sizes: list[int] = []
+        for name in parse.iter_page_names(raw_dir, version):
+            for c in chunker.chunk_page(parse.parse_file(raw_dir, version, name)):
+                sizes.append(c.token_count)
+                hashes.add(c.content_hash)
+        sizes.sort()
+        total += len(sizes)
+        print(
+            f"{version}: {len(sizes)} chunks; tokens p50 {_percentile(sizes, 0.5)}, "
+            f"p90 {_percentile(sizes, 0.9)}, p99 {_percentile(sizes, 0.99)}, max {sizes[-1]}"
+        )
+    s = chunker.stats
+    print(
+        f"\noversized blocks split: {s.split_code} code (between lines), "
+        f"{s.split_prose} prose (between sentences); {s.token_cuts} cut at token boundaries"
+    )
+    print(
+        f"distinct chunk texts: {len(hashes)} of {total} "
+        f"({1 - len(hashes) / total:.0%} need no embedding of their own)"
+    )
+    print(f"took {time.monotonic() - started:.0f}s")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="docs-qa")
     groups = parser.add_subparsers(dest="group", required=True)
@@ -137,6 +201,14 @@ def main(argv: list[str] | None = None) -> int:
         "--all", action="store_true", help="parse every downloaded page and print totals"
     )
     parse_parser.add_argument("--raw-dir", type=Path, default=fetch.DEFAULT_RAW_DIR)
+
+    chunk_parser = groups.add_parser("chunk", help="show how pages split into chunks")
+    chunk_parser.add_argument("pages", nargs="*", help="pages to show, e.g. 16/sql-select.html")
+    chunk_parser.add_argument(
+        "--report", action="store_true", help="chunk every page and print totals"
+    )
+    chunk_parser.add_argument("--max-tokens", type=int, default=chunk.MAX_TOKENS)
+    chunk_parser.add_argument("--raw-dir", type=Path, default=fetch.DEFAULT_RAW_DIR)
     args = parser.parse_args(argv)
 
     try:
@@ -148,6 +220,23 @@ def main(argv: list[str] | None = None) -> int:
             if not args.pages:
                 parser.error("parse: give one or more pages (e.g. 16/sql-select.html) or --all")
             return _parse_show(args.pages, args.raw_dir)
+        if args.group == "chunk":
+            if not args.report and not args.pages:
+                parser.error("chunk: give one or more pages (e.g. 16/sql-select.html) or --report")
+            if args.max_tokens < 50:
+                parser.error("chunk: --max-tokens must be at least 50")
+            try:
+                counter = tokens.HFTokenCounter()
+            except Exception as e:  # missing package, no network on first download, ...
+                print(
+                    f"error: couldn't load the {tokens.EMBEDDING_MODEL} tokenizer: {e}",
+                    file=sys.stderr,
+                )
+                return 1
+            chunker = chunk.Chunker(counter, args.max_tokens)
+            if args.report:
+                return _chunk_report(args.raw_dir, chunker)
+            return _chunk_show(args.pages, args.raw_dir, chunker)
         if args.command == "up":
             return _db_up()
         return _db_status()

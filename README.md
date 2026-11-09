@@ -59,6 +59,25 @@ uv run docs-qa parse --all                # parse every page, print totals
 
 Pages with no content are tables of contents and the alphabetical index.
 
+## Chunking
+
+`docs_qa/chunk.py` packs each section's blocks into chunks for embedding and search. Sizes are measured with the embedding model's own tokenizer (`BAAI/bge-small-en-v1.5`, via the `tokenizers` library).
+
+- **At most 400 tokens per chunk**, location line included. The embedding model accepts 512, but a cross-encoder reranker reads the question and the chunk together in one 512-token window; 400 leaves room for the question.
+- **Splits only between blocks**, so a paragraph, code example, table row or setting is never cut in half. A block over the limit on its own is split between lines (code, with the fences repeated) or sentences (prose).
+- **Balanced sizes**: the fewest chunks that fit, as equal as possible (60 + 60 + 60, not 80 + 80 + 20).
+- **One section, its own chunks**: sections are never merged, so every chunk links to an exact anchor.
+- **Location line without the version**: each chunk starts with e.g. `SELECT › Parameters › WITH Clause`. The version is a column used for filtering and citations, so text that is unchanged across versions has the same content hash and is embedded once.
+
+Chunk IDs are `<version>/<page>#<section key>/<n>`, e.g. `16/sql-select.html#SQL-WITH/0`.
+
+```bash
+uv run docs-qa chunk 16/sql-select.html   # show one page's chunks
+uv run docs-qa chunk --report             # chunk everything, print sizes and savings
+```
+
+_Report numbers: coming._
+
 ## Database
 
 Schema changes are numbered SQL files in [`src/docs_qa/sql/`](src/docs_qa/sql/), applied in order by `docs-qa db up` and recorded in `schema_migrations`. An applied file is never edited: its checksum is stored, so a change has to go in a new file.
@@ -79,6 +98,8 @@ src/docs_qa/
   db.py                   connection and migration runner
   fetch.py                polite, resumable docs downloader
   parse.py                pages -> sections of text blocks
+  chunk.py                sections -> chunks of at most 400 tokens
+  tokens.py               token counting with the embedding model's tokenizer
   sql/                    numbered schema migrations
 tests/
   fixtures/16/            trimmed real pages for the parser tests
