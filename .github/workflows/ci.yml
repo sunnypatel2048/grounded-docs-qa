@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # The same pgvector image as docker-compose.yml, so database tests run against the real thing.
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.2-pg18
+        env:
+          POSTGRES_USER: docsqa
+          POSTGRES_PASSWORD: docsqa
+          POSTGRES_DB: docsqa_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U docsqa -d docsqa_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      TEST_DATABASE_URL: postgresql://docsqa:docsqa@localhost:5433/docsqa_test
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # setup-uv no longer publishes floating major tags, so pin the exact release.
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      # uv reads .python-version and installs that Python itself.
+      # --locked fails if uv.lock is out of date with pyproject.toml.
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Format check
+        run: uv run ruff format --check
+
+      - name: Tests
+        run: uv run pytest -q -rs   # -rs lists skipped tests, so a missing database is visible

@@ -1,0 +1,21 @@
+services:
+  db:
+    # Pinned: pgvector 0.8.2 on PostgreSQL 18. Change deliberately, not by accident.
+    image: pgvector/pgvector:0.8.2-pg18
+    environment:
+      POSTGRES_USER: docsqa
+      POSTGRES_PASSWORD: docsqa
+      POSTGRES_DB: docsqa
+    ports:
+      - "5433:5432"   # 5433 on the Mac, so a local Postgres on 5432 doesn't clash
+    volumes:
+      - pgdata:/var/lib/postgresql   # PG 18 images keep data under /var/lib/postgresql/18
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docsqa -d docsqa"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:

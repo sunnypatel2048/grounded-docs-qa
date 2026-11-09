@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+*.egg-info
+
+# Virtual environment
+.venv/
+
+# Secrets
+.env
+
+# Downloaded docs and local caches: reproducible, so never committed
+data/raw/
+.cache/
+
+# macOS
+.DS_Store
