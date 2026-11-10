@@ -128,7 +128,12 @@ What's stored for all three versions:
 ```bash
 uv run docs-qa golden check            # rules, plus every quote found in its stored section
 uv run docs-qa golden check --offline  # rules only (what CI runs)
+uv run docs-qa golden sample -n 10     # random sections to write from, spread across doc areas
+uv run docs-qa golden changes --from 17 --to 18         # sections whose text changed
+uv run docs-qa golden changes --from 16 --to 17 --new   # sections new in 17 (version traps)
 ```
+
+Writing aids skip sections already used as evidence. `changes` ignores renumbered cross-references ("see Section 25.1.6") and matches sections across renamed pages: about 370 sections changed from 16 to 17 and 430 from 17 to 18, with about 150 new sections in each.
 
 ## Database
 
@@ -156,6 +161,7 @@ src/docs_qa/
   embed.py                the embedding model (and a fake one for tests)
   ingest.py               embed and store, skipping unchanged pages
   golden.py               golden set format, rules and evidence matching
+  explore.py              writing aids: section sampling, changes between versions
   sql/                    numbered schema migrations
 tests/
   fixtures/16/            trimmed real pages for the parser tests

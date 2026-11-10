@@ -24,7 +24,17 @@ DEFAULT_PATH = Path("eval/golden.yaml")
 
 TYPES = ("single", "multi_hop", "version_diff", "unanswerable")
 STYLES = ("keyword", "paraphrase")
-AREAS = ("settings", "sql", "functions", "catalogs", "admin", "internals", "clients")
+AREAS = (
+    "settings",
+    "sql",
+    "functions",
+    "catalogs",
+    "admin",
+    "internals",
+    "clients",
+    "extensions",
+    "release_notes",
+)
 SOURCES = ("human", "llm")
 STATUSES = ("draft", "reviewed")
 TEST_SHARE = 0.3

@@ -10,6 +10,8 @@ Commands:
 - `uv run docs-qa chunk --report`: chunk every page and print sizes and embedding savings
 - `uv run docs-qa ingest`: parse, chunk, embed and store everything (re-runs skip unchanged pages)
 - `uv run docs-qa golden check`: validate eval/golden.yaml against its rules and the stored docs
+- `uv run docs-qa golden sample`: random sections, spread across doc areas, to write questions from
+- `uv run docs-qa golden changes --from 16 --to 17`: sections that changed, or are new, in a version
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ import sys
 import time
 from pathlib import Path
 
-from docs_qa import chunk, db, embed, fetch, golden, ingest, parse, tokens
+from docs_qa import chunk, db, embed, explore, fetch, golden, ingest, parse, tokens
 from docs_qa.config import ConfigError, database_url
 
 
@@ -232,6 +234,81 @@ def _golden_check(path: Path, offline: bool) -> int:
     return 0
 
 
+def _clip(text: str, limit: int) -> str:
+    return (
+        text
+        if len(text) <= limit
+        else text[:limit].rstrip() + f" … ({len(text) - limit} more characters)"
+    )
+
+
+def _indent(text: str, prefix: str = "   ") -> str:
+    return "\n".join(prefix + line for line in text.splitlines())
+
+
+def _used_refs(path: Path) -> set[str]:
+    """Evidence refs already in the golden set, so they aren't offered again."""
+    if not path.exists():
+        return set()
+    return {e.ref for q in golden.load(path).questions for e in q.evidence}
+
+
+def _golden_sample(versions: list[str], n: int, seed: int, area: str | None, path: Path) -> int:
+    with db.connect(database_url()) as conn:
+        sections = explore.load_sections(conn, versions)
+    if area:
+        sections = [s for s in sections if explore.area_for(s.page) == area]
+    picked = explore.sample(sections, n, seed, exclude=_used_refs(path))
+    if not picked:
+        print("no sections to sample; is the database ingested?", file=sys.stderr)
+        return 1
+    for s in picked:
+        print(f"─── {s.ref}   (area: {explore.area_for(s.page)}, {s.tokens} tokens)")
+        print(f"   {' › '.join(s.trail)}")
+        print(f"   {s.url}\n")
+        print(_indent(_clip(s.text, 2000)))
+        print()
+    print(f"seed {seed}: run with --seed {seed + 1} for a different set")
+    return 0
+
+
+def _golden_changes(old: str, new: str, n: int, seed: int, show_new: bool, path: Path) -> int:
+    import random
+
+    with db.connect(database_url()) as conn:
+        sections = explore.load_sections(conn, [old, new])
+    found, added = explore.changes(
+        [s for s in sections if s.version == old], [s for s in sections if s.version == new]
+    )
+    used = _used_refs(path)
+    rng = random.Random(seed)
+    if show_new:
+        pool = [s for s in added if s.ref not in used]
+        print(
+            f"{len(pool)} sections are new in {new} (not in {old}); showing {min(n, len(pool))}\n"
+        )
+        for s in sorted(rng.sample(pool, min(n, len(pool))), key=lambda s: s.ref):
+            print(f"─── new in {new}: {s.ref}")
+            print(f"   {' › '.join(s.trail)}\n")
+            print(_indent(_clip(s.text, 600)))
+            print()
+    else:
+        pool = [c for c in found if c.before.ref not in used and c.after.ref not in used]
+        print(f"{len(pool)} sections changed from {old} to {new}; showing {min(n, len(pool))}\n")
+        for c in sorted(rng.sample(pool, min(n, len(pool))), key=lambda c: c.after.ref):
+            print(f"─── changed: {c.before.ref}")
+            if c.after.page != c.before.page:
+                print(f"         now: {c.after.ref}")
+            print(f"   {' › '.join(c.after.trail)}   ({c.changed_words} words changed)\n")
+            for sentence in c.removed[:8]:
+                print(_indent(_clip(sentence, 300), f"   - {old}: "))
+            for sentence in c.added[:8]:
+                print(_indent(_clip(sentence, 300), f"   + {new}: "))
+            print()
+    print(f"seed {seed}: run with --seed {seed + 1} for a different set")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="docs-qa")
     groups = parser.add_subparsers(dest="group", required=True)
@@ -278,6 +355,26 @@ def main(argv: list[str] | None = None) -> int:
     check_parser.add_argument(
         "--offline", action="store_true", help="check the rules only, not the stored docs"
     )
+    sample_parser = golden_commands.add_parser("sample", help="random sections to write from")
+    sample_parser.add_argument("-n", type=int, default=10)
+    sample_parser.add_argument("--versions", nargs="+", default=["16", "17", "18"])
+    sample_parser.add_argument("--seed", type=int, default=0)
+    sample_parser.add_argument("--area", choices=[*golden.AREAS, "other"])
+    sample_parser.add_argument("--file", type=Path, default=golden.DEFAULT_PATH)
+    changes_parser = golden_commands.add_parser(
+        "changes", help="sections that changed or are new between two versions"
+    )
+    changes_parser.add_argument("--from", dest="old", required=True)
+    changes_parser.add_argument("--to", dest="new", required=True)
+    changes_parser.add_argument("-n", type=int, default=10)
+    changes_parser.add_argument("--seed", type=int, default=0)
+    changes_parser.add_argument(
+        "--new",
+        dest="show_new",
+        action="store_true",
+        help="sections new in --to, instead of changed ones",
+    )
+    changes_parser.add_argument("--file", type=Path, default=golden.DEFAULT_PATH)
     args = parser.parse_args(argv)
 
     try:
@@ -290,6 +387,12 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error("parse: give one or more pages (e.g. 16/sql-select.html) or --all")
             return _parse_show(args.pages, args.raw_dir)
         if args.group == "golden":
+            if args.command == "sample":
+                return _golden_sample(args.versions, args.n, args.seed, args.area, args.file)
+            if args.command == "changes":
+                return _golden_changes(
+                    args.old, args.new, args.n, args.seed, args.show_new, args.file
+                )
             return _golden_check(args.file, args.offline)
         if args.group == "ingest":
             return _ingest(args.versions, args.limit, args.raw_dir)

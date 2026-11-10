@@ -6,7 +6,8 @@
 #   versions  the docs version(s) it's about: [16], or [17, 18] for a comparison
 #   type      single | multi_hop | version_diff | unanswerable
 #   style     keyword (uses an exact name, e.g. autovacuum_naptime) | paraphrase (no names)
-#   area      settings | sql | functions | catalogs | admin | internals | clients
+#   area      settings | sql | functions | catalogs | admin | internals | clients |
+#             extensions | release_notes
 #   source    human | llm
 #   status    draft | reviewed   (only reviewed questions are used in evaluation)
 #   evidence  list of {ref, quote}: ref = version/page#SECTION-KEY (see `docs-qa parse`),
