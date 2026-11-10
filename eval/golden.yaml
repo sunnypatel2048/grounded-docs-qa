@@ -1,0 +1,60 @@
+# Golden set for evaluating retrieval and answers. See eval/DATA_CARD.md and `docs-qa golden check`.
+#
+# Each question:
+#   id        q001, q002, ... (never reuse an id; the dev/test split is derived from it)
+#   question  as a user would ask it
+#   versions  the docs version(s) it's about: [16], or [17, 18] for a comparison
+#   type      single | multi_hop | version_diff | unanswerable
+#   style     keyword (uses an exact name, e.g. autovacuum_naptime) | paraphrase (no names)
+#   area      settings | sql | functions | catalogs | admin | internals | clients
+#   source    human | llm
+#   status    draft | reviewed   (only reviewed questions are used in evaluation)
+#   evidence  list of {ref, quote}: ref = version/page#SECTION-KEY (see `docs-qa parse`),
+#             quote = a short phrase copied from that section. Empty for unanswerable.
+#   answer    a short reference answer
+#   notes     optional
+
+format: 1
+
+questions:
+  - id: q001
+    question: "What is the default value of autovacuum_naptime in PostgreSQL 16?"
+    versions: [16]
+    type: single
+    style: keyword
+    area: settings
+    source: llm
+    status: draft
+    evidence:
+      - ref: "16/runtime-config-autovacuum.html#GUC-AUTOVACUUM-NAPTIME"
+        quote: "The default is one minute (1min)"
+    answer: "One minute (1min)."
+
+  - id: q002
+    question: "Can I change the maximum number of autovacuum workers without restarting the server? Is that different between PostgreSQL 17 and 18?"
+    versions: [17, 18]
+    type: version_diff
+    style: paraphrase
+    area: settings
+    source: llm
+    status: draft
+    evidence:
+      - ref: "17/runtime-config-autovacuum.html#GUC-AUTOVACUUM-MAX-WORKERS"
+        quote: "This parameter can only be set at server start."
+      - ref: "18/runtime-config-vacuum.html#GUC-AUTOVACUUM-MAX-WORKERS"
+        quote: "This parameter can only be set in the postgresql.conf file or on the server command line."
+      - ref: "18/runtime-config-vacuum.html#GUC-AUTOVACUUM-MAX-WORKERS"
+        quote: "higher than autovacuum_worker_slots will have no effect"
+    answer: "In 17, autovacuum_max_workers needs a server restart. In 18 it can be changed in postgresql.conf and reloaded, but values above autovacuum_worker_slots (set at server start) have no effect."
+    notes: "In 18 the autovacuum settings moved from runtime-config-autovacuum.html to runtime-config-vacuum.html."
+
+  - id: q003
+    question: "How do I use pg_combinebackup to restore an incremental backup in PostgreSQL 16?"
+    versions: [16]
+    type: unanswerable
+    style: keyword
+    area: admin
+    source: llm
+    status: draft
+    answer: "The PostgreSQL 16 docs don't cover pg_combinebackup: incremental backups and pg_combinebackup were added in PostgreSQL 17."
+    notes: "Version trap: 17/app-pgcombinebackup.html exists, 16 has no such page."

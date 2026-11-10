@@ -165,3 +165,20 @@ def test_ingest_without_the_embed_group_explains_how_to_install(monkeypatch, cap
     monkeypatch.setattr(embed, "LocalEmbedder", missing)
     assert cli.main(["ingest", "--raw-dir", FIXTURES]) == 1
     assert "embed` dependency group" in capsys.readouterr().err
+
+
+def test_golden_check_offline_passes_on_the_committed_set(capsys):
+    golden_file = str(Path(__file__).parent.parent / "eval" / "golden.yaml")
+    assert cli.main(["golden", "check", "--offline", "--file", golden_file]) == 0
+    assert "OK: rules only" in capsys.readouterr().out
+
+
+def test_golden_check_reports_problems(tmp_path, capsys):
+    bad = tmp_path / "golden.yaml"
+    bad.write_text(
+        "format: 1\nquestions:\n  - id: q001\n    question: x?\n    versions: [16]\n"
+        "    type: single\n    style: keyword\n    area: sql\n    source: human\n"
+        "    status: reviewed\n    answer: y\n"
+    )
+    assert cli.main(["golden", "check", "--offline", "--file", str(bad)]) == 1
+    assert "q001: a single question needs evidence" in capsys.readouterr().out

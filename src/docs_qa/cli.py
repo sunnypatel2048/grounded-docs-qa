@@ -9,6 +9,7 @@ Commands:
 - `uv run docs-qa chunk 16/sql-select.html`: show a page's chunks
 - `uv run docs-qa chunk --report`: chunk every page and print sizes and embedding savings
 - `uv run docs-qa ingest`: parse, chunk, embed and store everything (re-runs skip unchanged pages)
+- `uv run docs-qa golden check`: validate eval/golden.yaml against its rules and the stored docs
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import sys
 import time
 from pathlib import Path
 
-from docs_qa import chunk, db, embed, fetch, ingest, parse, tokens
+from docs_qa import chunk, db, embed, fetch, golden, ingest, parse, tokens
 from docs_qa.config import ConfigError, database_url
 
 
@@ -213,6 +214,24 @@ def _ingest(versions: list[str], limit: int | None, raw_dir: Path) -> int:
     return 0
 
 
+def _golden_check(path: Path, offline: bool) -> int:
+    gold = golden.load(path)
+    problems = list(gold.problems)
+    if not offline:
+        with db.connect(database_url()) as conn:
+            problems += golden.evidence_problems(conn, gold)
+    for line in golden.mix_report(gold):
+        print(line)
+    if problems:
+        print(f"\n{len(problems)} problems:")
+        for p in problems:
+            print(f"  {p}")
+        return 1
+    checked = "rules only (--offline)" if offline else "rules and evidence quotes"
+    print(f"\nOK: {checked}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="docs-qa")
     groups = parser.add_subparsers(dest="group", required=True)
@@ -252,6 +271,13 @@ def main(argv: list[str] | None = None) -> int:
         "--limit", type=int, default=None, help="first N pages per version only (for a trial)"
     )
     ingest_parser.add_argument("--raw-dir", type=Path, default=fetch.DEFAULT_RAW_DIR)
+    golden_parser = groups.add_parser("golden", help="the evaluation golden set")
+    golden_commands = golden_parser.add_subparsers(dest="command", required=True)
+    check_parser = golden_commands.add_parser("check", help="validate the golden set")
+    check_parser.add_argument("--file", type=Path, default=golden.DEFAULT_PATH)
+    check_parser.add_argument(
+        "--offline", action="store_true", help="check the rules only, not the stored docs"
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -263,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
             if not args.pages:
                 parser.error("parse: give one or more pages (e.g. 16/sql-select.html) or --all")
             return _parse_show(args.pages, args.raw_dir)
+        if args.group == "golden":
+            return _golden_check(args.file, args.offline)
         if args.group == "ingest":
             return _ingest(args.versions, args.limit, args.raw_dir)
         if args.group == "chunk":
@@ -291,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
         fetch.CrawlAborted,
         parse.ParseError,
         ingest.IngestError,
+        golden.GoldenError,
     ) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

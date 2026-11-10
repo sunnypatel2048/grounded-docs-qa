@@ -115,6 +115,21 @@ What's stored for all three versions:
 - 98 MB for chunks including indexes (25 MB of it the HNSW index), 27 MB of embedding cache.
 - A second run finds nothing to do: 0 new, 0 changed, nothing embedded, only the ~45 s of parsing and chunking.
 
+## Golden set
+
+[`eval/golden.yaml`](eval/golden.yaml) holds questions with known answers and known evidence, for measuring retrieval and answers.
+
+- **Evidence is a section plus a quote**, e.g. `16/runtime-config-autovacuum.html#GUC-AUTOVACUUM-NAPTIME` and "The default is one minute". A retrieved chunk finds a piece of evidence when it comes from that section and contains the quote. Unlike chunk IDs, that survives changes to the chunker.
+- **Mix:** about 60% single-fact, 25% multi-hop or version comparisons, 15% unanswerable (including version traps: a feature asked about in a version that doesn't have it yet).
+- **Tagged** by version, style (exact `keyword` vs `paraphrase`), doc area and source (human or LLM-drafted), so results can be broken down instead of averaged.
+- **Dev/test split** from a hash of each question's ID (30% test): tune on dev, report on test.
+- Only questions marked `reviewed` are used in evaluation.
+
+```bash
+uv run docs-qa golden check            # rules, plus every quote found in its stored section
+uv run docs-qa golden check --offline  # rules only (what CI runs)
+```
+
 ## Database
 
 Schema changes are numbered SQL files in [`src/docs_qa/sql/`](src/docs_qa/sql/), applied in order by `docs-qa db up` and recorded in `schema_migrations`. An applied file is never edited: its checksum is stored, so a change has to go in a new file.
@@ -129,6 +144,7 @@ Schema changes are numbered SQL files in [`src/docs_qa/sql/`](src/docs_qa/sql/),
 
 ```
 data/raw/<version>/       downloaded HTML pages + manifest.jsonl (git-ignored)
+eval/golden.yaml          the golden set
 docker-compose.yml        pgvector (PostgreSQL 18) on port 5433
 src/docs_qa/
   cli.py                  the docs-qa command
@@ -139,6 +155,7 @@ src/docs_qa/
   tokens.py               token counting with the embedding model's tokenizer
   embed.py                the embedding model (and a fake one for tests)
   ingest.py               embed and store, skipping unchanged pages
+  golden.py               golden set format, rules and evidence matching
   sql/                    numbered schema migrations
 tests/
   fixtures/16/            trimmed real pages for the parser tests
